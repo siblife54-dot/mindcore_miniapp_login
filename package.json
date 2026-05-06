@@ -1,0 +1,9 @@
+{
+  "name": "mindcore-miniapp-login-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram webhook bot for issuing Mindcore SaaS access via Supabase Edge Function",
+  "scripts": {
+    "start": "vercel dev"
+  }
+}
