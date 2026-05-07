@@ -118,6 +118,20 @@ async function issueAccess(telegram_id, username) {
   return res.json();
 }
 
+async function notifyAdmin(text) {
+  const adminChatId = process.env.ADMIN_CHAT_ID;
+
+  if (!adminChatId) {
+    console.warn("ADMIN_CHAT_ID is not set");
+    return;
+  }
+
+  await telegramApi("sendMessage", {
+    chat_id: adminChatId,
+    text,
+  });
+}
+
 async function handleStart(chatId) {
   await telegramApi("sendMessage", {
     chat_id: chatId,
@@ -168,6 +182,17 @@ async function handleAccess(callbackQuery) {
       chat_id: chatId,
       text: buildAccessMessage(accessData),
     });
+
+    if (accessData?.already_issued === false) {
+      await notifyAdmin([
+        "Новый пользователь Mindcore",
+        "",
+        `Telegram: @${from.username || "-"}`,
+        `Telegram ID: ${from.id || "-"}`,
+        `Логин: ${accessData?.login || "-"}`,
+        `Пароль: ${accessData?.password || "-"}`,
+      ].join("\n"));
+    }
   } catch (error) {
     console.error("Failed to issue access:", error);
 
@@ -245,6 +270,16 @@ async function handlePaymentDone(callbackQuery, tariff) {
         accessData?.login || "-",
       ].join("\n"),
     });
+
+    await notifyAdmin([
+      "Заявка на оплату Mindcore",
+      "",
+      `Тариф: ${isBasic ? "Basic" : "Pro"}`,
+      `Telegram: @${from.username || "-"}`,
+      `Telegram ID: ${from.id || "-"}`,
+      `Логин: ${accessData?.login || "-"}`,
+      `Пароль: ${accessData?.password || "-"}`,
+    ].join("\n"));
   } catch (error) {
     console.error("Failed to confirm payment request:", error);
 
