@@ -306,7 +306,7 @@ async function handleChooseTariff(callbackQuery, tariff) {
       },
     });
   } catch (error) {
-    console.error("Failed to prepare tariff payment:", error);
+    console.error("Create payment failed:", error);
 
     await telegramApi("sendMessage", {
       chat_id: chatId,

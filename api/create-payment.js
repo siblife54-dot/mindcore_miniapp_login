@@ -13,11 +13,16 @@ async function createYookassaPayment({ telegram_id, username, login, tariff }) {
   const secretKey = process.env.YOOKASSA_SECRET_KEY;
 
   if (!shopId || !secretKey) {
+    console.error("Missing YooKassa ENV:", {
+      YOOKASSA_SHOP_ID: Boolean(shopId),
+      YOOKASSA_SECRET_KEY: Boolean(secretKey),
+    });
     throw new Error("YOOKASSA_SHOP_ID or YOOKASSA_SECRET_KEY is not set");
   }
 
   const price = getPrice(tariff);
   if (!price) {
+    console.error("Missing price ENV for tariff:", tariff);
     throw new Error(`Price is not configured for tariff: ${tariff}`);
   }
 
@@ -55,7 +60,9 @@ async function createYookassaPayment({ telegram_id, username, login, tariff }) {
   const data = await paymentRes.json();
 
   if (!paymentRes.ok) {
+    console.error("YooKassa response error:", { status: paymentRes.status, data });
     const errText = data?.description || data?.type || JSON.stringify(data);
+    console.error("YooKassa full error text:", errText);
     throw new Error(`YooKassa error: ${errText}`);
   }
 
