@@ -1,5 +1,7 @@
+import crypto from "node:crypto";
 const TELEGRAM_API_BASE = "https://api.telegram.org";
 const PAYMENT_FALLBACK_URL = "https://t.me/igornbk";
+const YOOKASSA_API_URL = "https://api.yookassa.ru/v3/payments";
 
 async function telegramApi(method, payload) {
   const token = process.env.BOT_TOKEN;
@@ -118,6 +120,71 @@ async function issueAccess(telegram_id, username) {
   return res.json();
 }
 
+
+function getPriceByTariff(tariff) {
+  if (tariff === "basic") return process.env.BASIC_PRICE_RUB;
+  if (tariff === "pro") return process.env.PRO_PRICE_RUB;
+  return null;
+}
+
+async function createPayment({ telegram_id, username, login, tariff }) {
+  const shopId = process.env.YOOKASSA_SHOP_ID;
+  const secretKey = process.env.YOOKASSA_SECRET_KEY;
+
+  if (!shopId || !secretKey) {
+    throw new Error("YOOKASSA_SHOP_ID or YOOKASSA_SECRET_KEY is not set");
+  }
+
+  const price = getPriceByTariff(tariff);
+  if (!price) {
+    throw new Error(`Price is not configured for tariff: ${tariff}`);
+  }
+
+  const auth = Buffer.from(`${shopId}:${secretKey}`).toString("base64");
+  const tariffTitle = tariff === "basic" ? "Basic" : "Pro";
+  const returnUrl = process.env.RETURN_URL || "https://t.me/mindcore_miniapp_bot";
+
+  const paymentRes = await fetch(YOOKASSA_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Basic ${auth}`,
+      "Idempotence-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify({
+      amount: {
+        value: String(price),
+        currency: "RUB",
+      },
+      capture: true,
+      confirmation: {
+        type: "redirect",
+        return_url: returnUrl,
+      },
+      description: `Mindcore тариф ${tariffTitle} для кабинета ${login}`,
+      metadata: {
+        login: String(login),
+        telegram_id: String(telegram_id),
+        username: username ? String(username) : "",
+        tariff: String(tariff),
+      },
+    }),
+  });
+
+  const data = await paymentRes.json();
+
+  if (!paymentRes.ok) {
+    const errText = data?.description || data?.type || JSON.stringify(data);
+    throw new Error(`YooKassa error: ${errText}`);
+  }
+
+  if (!data?.confirmation?.confirmation_url) {
+    throw new Error("YooKassa did not return confirmation_url");
+  }
+
+  return data;
+}
+
 async function notifyAdmin(text) {
   const adminChatId = process.env.ADMIN_CHAT_ID;
 
@@ -217,19 +284,23 @@ async function handleChooseTariff(callbackQuery, tariff) {
   const message = callbackQuery.message || {};
   const chatId = message.chat?.id;
   const isBasic = tariff === "basic";
-  const paymentUrl = isBasic
-    ? process.env.BASIC_PAYMENT_URL || PAYMENT_FALLBACK_URL
-    : process.env.PRO_PAYMENT_URL || PAYMENT_FALLBACK_URL;
-
+  
   try {
     const accessData = await issueAccess(from.id, from.username || null);
+
+    const payment = await createPayment({
+      telegram_id: from.id,
+      username: from.username || null,
+      login: accessData?.login,
+      tariff,
+    });
 
     await telegramApi("sendMessage", {
       chat_id: chatId,
       text: isBasic ? buildBasicMessage(accessData?.login) : buildProMessage(accessData?.login),
       reply_markup: {
         inline_keyboard: [
-          [{ text: isBasic ? "Оплатить Basic" : "Оплатить Pro", url: paymentUrl }],
+          [{ text: isBasic ? "Оплатить Basic" : "Оплатить Pro", url: payment.confirmation.confirmation_url || PAYMENT_FALLBACK_URL }],
           [{ text: isBasic ? "Я оплатил Basic" : "Я оплатил Pro", callback_data: isBasic ? "payment_done_basic" : "payment_done_pro" }],
         ],
       },
@@ -239,7 +310,7 @@ async function handleChooseTariff(callbackQuery, tariff) {
 
     await telegramApi("sendMessage", {
       chat_id: chatId,
-      text: "Не удалось подготовить оплату. Напишите нам, мы поможем. https://t.me/igornbk",
+      text: "Не удалось создать ссылку на оплату. Напишите нам: https://t.me/igornbk",
     });
   } finally {
     try {
