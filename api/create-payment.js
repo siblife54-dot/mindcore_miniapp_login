@@ -29,6 +29,8 @@ async function createYookassaPayment({ telegram_id, username, login, tariff }) {
   const returnUrl = process.env.RETURN_URL || "https://t.me/mindcore_miniapp_bot";
   const auth = Buffer.from(`${shopId}:${secretKey}`).toString("base64");
   const tariffTitle = tariff === "basic" ? "Basic" : "Pro";
+  const receiptEmail = process.env.YOOKASSA_RECEIPT_EMAIL || "mindcore@example.com";
+  const amountValue = String(price);
 
   const paymentRes = await fetch(YOOKASSA_API_URL, {
     method: "POST",
@@ -39,7 +41,7 @@ async function createYookassaPayment({ telegram_id, username, login, tariff }) {
     },
     body: JSON.stringify({
       amount: {
-        value: String(price),
+        value: amountValue,
         currency: "RUB",
       },
       capture: true,
@@ -48,6 +50,24 @@ async function createYookassaPayment({ telegram_id, username, login, tariff }) {
         return_url: returnUrl,
       },
       description: `Mindcore тариф ${tariffTitle} для кабинета ${login}`,
+      receipt: {
+        customer: {
+          email: receiptEmail,
+        },
+        items: [
+          {
+            description: `Mindcore тариф ${tariffTitle}`,
+            quantity: "1.00",
+            amount: {
+              value: amountValue,
+              currency: "RUB",
+            },
+            vat_code: 1,
+            payment_mode: "full_payment",
+            payment_subject: "service",
+          },
+        ],
+      },
       metadata: {
         login: String(login),
         telegram_id: String(telegram_id),
