@@ -264,6 +264,8 @@ async function handlePaymentDone(callbackQuery, tariff) {
 }
 
 export default async function handler(req, res) {
+  console.log("UPDATE:", JSON.stringify(req.body));
+
   if (!process.env.BOT_TOKEN || !process.env.ISSUE_ACCESS_URL) {
     return res.status(500).json({ error: "Missing BOT_TOKEN or ISSUE_ACCESS_URL" });
   }
