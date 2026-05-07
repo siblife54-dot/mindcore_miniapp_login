@@ -310,11 +310,7 @@ async function handleChooseTariff(callbackQuery, tariff) {
 
     await telegramApi("sendMessage", {
       chat_id: chatId,
-      text:
-        "Ошибка оплаты:
-
-" +
-        String(error?.message || error),
+      text: "Не удалось создать ссылку на оплату. Напишите нам: https://t.me/igornbk",
     });
   } finally {
     try {
